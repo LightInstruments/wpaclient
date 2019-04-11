@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -333,4 +334,91 @@ func (c *Client) ListNetworks() ([]Network, error) {
 	}
 
 	return parseNetwork(res)
+}
+
+//AddNetwork executes "ADD_NETWORK" command and returns the id of the newly created network
+func (c *Client) AddNetwork() (int, error) {
+	res, err := c.Execute(CmdAddNetwork)
+	if err != nil {
+		return -1, errors.Wrapf(err, "Failed executing %v", CmdAddNetwork)
+	}
+
+	resString := string(res)
+
+	//remove trailing carriage return
+	resString = strings.ReplaceAll(resString, "\n", "")
+
+	r, err := strconv.Atoi(resString)
+	if err != nil {
+		return -1, errors.Wrapf(err, "Failed casting %v to integer", res)
+	}
+
+	return r, nil
+}
+
+//RemoveNetwork executes "REMOVE_NETWORK" command and returns if any error happens
+func (c *Client) RemoveNetwork(network int) error {
+	res, err := c.Execute(CmdRemoveNetwork, strconv.Itoa(network))
+	if err != nil {
+		return errors.Wrapf(err, "Failed removing network %v: %v", network, string(res))
+	}
+
+	return nil
+}
+
+func (c *Client) SetNetworkSSID(network int, ssid string) error {
+	res, err := c.Execute(CmdSetNetwork, strconv.Itoa(network), "ssid", ssid)
+	if err != nil {
+		return errors.Wrapf(err, "Failed setting ssid for network %v: %v", network, string(res))
+	}
+
+	return nil
+}
+
+func (c *Client) SaveConfig() error {
+	res, err := c.Execute(CmdSaveConfig)
+	if err != nil {
+		return errors.Wrapf(err, "Failed saving config: %v", string(res))
+	}
+	return nil
+}
+
+func (c *Client) SaveEmptyPassword(network int) error {
+	res, err := c.Execute(CmdSetNetwork, strconv.Itoa(network), "key_mgmt", "NONE")
+	if err != nil {
+		return errors.Wrapf(err, "Failed setting empty password: %v", string(res))
+	}
+	return nil
+}
+
+func (c *Client) SetNetworkPassword(network int, pw string) error {
+	res, err := c.Execute(CmdSetNetwork, strconv.Itoa(network), "psk", pw)
+	if err != nil {
+		return errors.Wrapf(err, "Failed setting password: %v", string(res))
+	}
+	return nil
+}
+
+func (c *Client) SelectNetwork(network int) error {
+	res, err := c.Execute(CmdSelectNetwork, strconv.Itoa(network))
+	if err != nil {
+		return errors.Wrapf(err, "Failed selecting network: %v", string(res))
+	}
+	return nil
+}
+
+func (c *Client) EnableNetwork(network int) error {
+	res, err := c.Execute(CmdEnableNetwork, strconv.Itoa(network))
+	if err != nil {
+		return errors.Wrapf(err, "Failed enabling network: %v", string(res))
+	}
+	return nil
+}
+
+func (c *Client) DisableNetwork(network int) error {
+	res, err := c.Execute(CmdDisableNetwork, strconv.Itoa(network))
+	if err != nil {
+		return errors.Wrapf(err, "Failed disabling network: %v", string(res))
+	}
+	return nil
 }
