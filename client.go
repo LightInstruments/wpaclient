@@ -422,3 +422,10 @@ func (c *Client) DisableNetwork(network int) error {
 	}
 	return nil
 }
+
+func (c *Client) Status() (error, *Status) {
+	res, err := c.Execute(CmdStatus)
+	if err != nil {
+		return errors.Wrapf(err, "Failed retrieving status: %v", string(res)), nil
+	}
+}
