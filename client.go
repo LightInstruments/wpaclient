@@ -428,4 +428,5 @@ func (c *Client) Status() (error, *Status) {
 	if err != nil {
 		return errors.Wrapf(err, "Failed retrieving status: %v", string(res)), nil
 	}
+	return nil, nil
 }
