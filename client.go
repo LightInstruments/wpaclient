@@ -3,7 +3,6 @@ package wpaclient
 import (
 	"bytes"
 	"fmt"
-	"github.com/labstack/gommon/log"
 	"io"
 	"strconv"
 	"strings"
@@ -429,7 +428,6 @@ func (c *Client) SaveEmptyPassword(network int) error {
 
 func (c *Client) SetNetworkPassword(network int, pw string) error {
 	formattedPswd := fmt.Sprintf("\"%s\"", pw)
-	log.Printf("Set nw pw calld with pw %s\n", pw)
 	res, err := c.Execute(CmdSetNetwork, strconv.Itoa(network), "psk", formattedPswd)
 	if err != nil {
 		return errors.Wrapf(err, "Failed setting password to %s: %v", pw, string(res))
@@ -525,8 +523,14 @@ func (c *Client) Connect(ssid, password string) error {
 			return errors.Wrapf(err, "Failed setting network ssid")
 		}
 
-		if err = c.SetNetworkPassword(networkId, password); err != nil {
-			return errors.Wrapf(err, "Failed setting network password")
+		if password == "" {
+			if err = c.SaveEmptyPassword(networkId); err != nil {
+				return errors.Wrapf(err, "Failed setting empty password")
+			}
+		} else {
+			if err = c.SetNetworkPassword(networkId, password); err != nil {
+				return errors.Wrapf(err, "Failed setting network password")
+			}
 		}
 	}
 
