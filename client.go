@@ -3,6 +3,7 @@ package wpaclient
 import (
 	"bytes"
 	"fmt"
+	"github.com/labstack/gommon/log"
 	"io"
 	"strconv"
 	"strings"
@@ -277,7 +278,8 @@ func (c *Client) Close() error {
 
 // Scan executes "SCAN" and "SCAN_RESULT" commands returns scanned list of Access Points
 func (c *Client) Scan() ([]AP, error) {
-	ch, err := c.Notify(WpsEventApAvailable)
+//	ch, err := c.Notify(WpsEventApAvailable)
+	ch, err := c.Notify(WpaEventScanResults)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +293,7 @@ func (c *Client) Scan() ([]AP, error) {
 
 		select {
 		case <-ch:
-		case <-time.After(time.Second * 2):
+		case <-time.After(time.Second * 3):
 			return errors.New("scan timed out")
 		}
 
@@ -312,7 +314,12 @@ func (c *Client) Scan() ([]AP, error) {
 		return aps, nil
 	}
 
-	aps, err := scanRes()
+	if err := scan(); err != nil {
+		return nil, err
+	}
+
+/*	aps, err := scanRes()
+	_, err = scanRes()
 	if err != nil {
 		return nil, err
 	}
@@ -321,9 +328,37 @@ func (c *Client) Scan() ([]AP, error) {
 		if err := scan(); err != nil {
 			return nil, err
 		}
-	}
+	} */
 
 	return scanRes()
+}
+
+func (c *Client) ScanAsync() error {
+	_, err := c.Execute(CmdScan)
+	if err != nil {
+		return errors.Wrapf(err, "Failed scanning")
+	}
+	return nil
+}
+
+func (c *Client) ScanResult() ([]AP, error) {
+	res, err := c.Execute(CmdScanResults)
+	if err != nil {
+		return nil, err
+	}
+	aps, err := parseAP(res)
+	if err != nil {
+		return nil, err
+	}
+
+	//remove aps with empty ssid
+	clearedAPs := make([]AP, 0)
+	for _, ap := range aps {
+		if ap.SSID != "" {
+			clearedAPs = append(clearedAPs, ap)
+		}
+	}
+	return clearedAPs, nil
 }
 
 // ListNetworks executes "LIST_NETWORK" command and returns Networks
@@ -367,7 +402,8 @@ func (c *Client) RemoveNetwork(network int) error {
 }
 
 func (c *Client) SetNetworkSSID(network int, ssid string) error {
-	res, err := c.Execute(CmdSetNetwork, strconv.Itoa(network), "ssid", ssid)
+	formattedSSID := fmt.Sprintf("\"%s\"", ssid)
+	res, err := c.Execute(CmdSetNetwork, strconv.Itoa(network), "ssid", formattedSSID)
 	if err != nil {
 		return errors.Wrapf(err, "Failed setting ssid for network %v: %v", network, string(res))
 	}
@@ -392,9 +428,11 @@ func (c *Client) SaveEmptyPassword(network int) error {
 }
 
 func (c *Client) SetNetworkPassword(network int, pw string) error {
-	res, err := c.Execute(CmdSetNetwork, strconv.Itoa(network), "psk", pw)
+	formattedPswd := fmt.Sprintf("\"%s\"", pw)
+	log.Printf("Set nw pw calld with pw %s\n", pw)
+	res, err := c.Execute(CmdSetNetwork, strconv.Itoa(network), "psk", formattedPswd)
 	if err != nil {
-		return errors.Wrapf(err, "Failed setting password: %v", string(res))
+		return errors.Wrapf(err, "Failed setting password to %s: %v", pw, string(res))
 	}
 	return nil
 }
@@ -423,10 +461,88 @@ func (c *Client) DisableNetwork(network int) error {
 	return nil
 }
 
-func (c *Client) Status() (error, *Status) {
+func (c *Client) Disconnect() error {
+	res, err := c.Execute(CmdDisconnect)
+	if err != nil {
+		return errors.Wrapf(err, "Failed disconnecting from current network: %v", string(res))
+	}
+	return nil
+}
+
+func (c *Client) Status() (*Status, error) {
 	res, err := c.Execute(CmdStatus)
 	if err != nil {
-		return errors.Wrapf(err, "Failed retrieving status: %v", string(res)), nil
+		return nil, errors.Wrapf(err, "Failed retrieving status: %v", string(res))
 	}
-	return nil, nil
+	return parseStatus(res)
+}
+
+func (c *Client) ListAPs() ([]AP, error) {
+	bssList, err := c.Scan()
+
+	if err != nil {
+		return nil, err
+	}
+
+	aps := make([]AP, 0)
+
+	for _, bss := range bssList {
+		if bss.SSID != "" {
+			aps = append(aps, bss)
+		}
+	}
+
+	return aps, nil
+}
+
+func (c *Client) Connect(ssid, password string) error {
+	status, err := c.Status()
+	if err != nil {
+		return errors.Wrapf(err, "Failed to ")
+	}
+
+	if status.IsConnected() && status.SSID == ssid{
+		//already connected to that wifi
+		return nil
+	}
+
+	networkId := -1
+	NWs, err := c.ListNetworks()
+	for _, nw := range NWs {
+		if nw.SSID == ssid {
+			//desired network is known
+			networkId = nw.ID
+		}
+	}
+
+	if networkId < 0 {
+		networkId, err = c.AddNetwork()
+		if err != nil {
+			return errors.Wrapf(err, "Failed creating new network")
+		}
+
+		if err = c.SetNetworkSSID(networkId, ssid); err != nil {
+			return errors.Wrapf(err, "Failed setting network ssid")
+		}
+
+		if err = c.SetNetworkPassword(networkId, password); err != nil {
+			return errors.Wrapf(err, "Failed setting network password")
+		}
+	}
+
+	if status.IsConnected() {
+		if err = c.Disconnect(); err != nil {
+			return errors.Wrapf(err, "Failed to disconnect from currently connected network")
+		}
+	}
+
+	if err = c.SelectNetwork(networkId); err != nil {
+		return errors.Wrapf(err, "Failed to select network %d", networkId)
+	}
+
+	if err = c.EnableNetwork(networkId); err != nil {
+		return errors.Wrapf(err, "Failed to enable network %d", networkId)
+	}
+
+	return nil
 }
