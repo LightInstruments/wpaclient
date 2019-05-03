@@ -353,7 +353,8 @@ func (c *Client) ScanResult() ([]AP, error) {
 	//remove aps with empty ssid
 	clearedAPs := make([]AP, 0)
 	for _, ap := range aps {
-		if ap.SSID != "" {
+		trimmedSSID := strings.Trim(ap.SSID, " ")
+		if trimmedSSID != "" {
 			clearedAPs = append(clearedAPs, ap)
 		}
 	}
@@ -493,60 +494,57 @@ func (c *Client) ListAPs() ([]AP, error) {
 	return aps, nil
 }
 
-func (c *Client) Connect(ssid, password string) error {
+func (c *Client) ConnectNetwork(networkId int) error {
 	status, err := c.Status()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to ")
+		return errors.Wrapf(err, "Failed to retrieve status")
 	}
 
-	if status.IsConnected() && status.SSID == ssid{
-		//already connected to that wifi
+	if status.IsConnected() && status.Id == networkId {
 		return nil
-	}
-
-	networkId := -1
-	NWs, err := c.ListNetworks()
-	for _, nw := range NWs {
-		if nw.SSID == ssid {
-			//desired network is known
-			networkId = nw.ID
-		}
-	}
-
-	if networkId < 0 {
-		networkId, err = c.AddNetwork()
-		if err != nil {
-			return errors.Wrapf(err, "Failed creating new network")
-		}
-
-		if err = c.SetNetworkSSID(networkId, ssid); err != nil {
-			return errors.Wrapf(err, "Failed setting network ssid")
-		}
-
-		if password == "" {
-			if err = c.SaveEmptyPassword(networkId); err != nil {
-				return errors.Wrapf(err, "Failed setting empty password")
-			}
-		} else {
-			if err = c.SetNetworkPassword(networkId, password); err != nil {
-				return errors.Wrapf(err, "Failed setting network password")
-			}
-		}
-	}
-
-	if status.IsConnected() {
-		if err = c.Disconnect(); err != nil {
-			return errors.Wrapf(err, "Failed to disconnect from currently connected network")
-		}
-	}
-
-	if err = c.SelectNetwork(networkId); err != nil {
-		return errors.Wrapf(err, "Failed to select network %d", networkId)
 	}
 
 	if err = c.EnableNetwork(networkId); err != nil {
 		return errors.Wrapf(err, "Failed to enable network %d", networkId)
 	}
 
+	if err = c.SelectNetwork(networkId); err != nil {
+		return errors.Wrapf(err, "Failed to select network %d", networkId)
+	}
+
 	return nil
+}
+
+func (c *Client) CreateNetwork(ssid, password string) (int, error) {
+
+	NWs, err := c.ListNetworks()
+	if err != nil {
+		return -1, errors.Wrapf(err, "Failed to list networks")
+	}
+	for _, nw := range NWs {
+		if nw.SSID == ssid {
+			//desired network is known
+			return nw.ID, nil
+		}
+	}
+
+	networkId, err := c.AddNetwork()
+	if err != nil {
+		return -1, errors.Wrapf(err, "Failed creating new network")
+	}
+	if err = c.SetNetworkSSID(networkId, ssid); err != nil {
+		return -1, errors.Wrapf(err, "Failed setting network ssid")
+	}
+
+	if password == "" {
+		if err = c.SaveEmptyPassword(networkId); err != nil {
+			return -1, errors.Wrapf(err, "Failed setting empty password")
+		}
+	} else {
+		if err = c.SetNetworkPassword(networkId, password); err != nil {
+			return -1, errors.Wrapf(err, "Failed setting network password")
+		}
+	}
+
+	return networkId, nil
 }

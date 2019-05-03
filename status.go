@@ -15,7 +15,7 @@ type Status struct {
 	BSSID net.HardwareAddr
 	Freq uint
 	SSID string
-	Id uint
+	Id int
 	Mode string
 	PairwiseCipher string
 	GroupCipher string
@@ -55,7 +55,7 @@ func parseStatus(data []byte) (*Status, error) {
 					if err != nil {
 						continue
 					}
-					status.Id = uint(i)
+					status.Id = int(i)
 				case "mode":
 					status.Mode = decomposed[1]
 				case "pairwise_cipher":
