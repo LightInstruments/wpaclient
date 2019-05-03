@@ -364,6 +364,9 @@ const (
 	WpaGlobalCtrlIfacePort = 9878
 	// WpaGlobalCtrlIfacePortLimit as defined in wpactrl/wpa_ctrl.h:544
 	WpaGlobalCtrlIfacePortLimit = 20
+
+	WpaEventTempDisabledReasonWrongKey = "WRONG_KEY"
+	WpaEventTempDisabledReasonConnFailed = "CONN_FAILED"
 )
 
 // WpaVendorElemFrame as declared in wpactrl/wpa_ctrl.h:369
