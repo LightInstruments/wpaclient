@@ -49,10 +49,23 @@ func parseEvent(b []byte) *Event {
 		}
 		key := elementSplitted[0]
 		value := elementSplitted[1]
-		if key == "ssid" && value[0] == '"' && value[len(value)-1] == '"' {
-			value = value[1:len(value)-1]
+		if key == "ssid" {
+			//take extra care of ssid later on
+			continue
 		}
 		argsMap[key] = value
+	}
+
+	//care for ssid
+	ssidRegex := regexp.MustCompile("ssid=\"[[:print:]]+\"")
+	ssidPair := ssidRegex.FindString(argsString)
+	if len(ssidPair) > 0 {
+		index := strings.Index(ssidPair, "=")
+		value := ssidPair[index+1:]
+		if value[0] == '"' && value[len(value)-1] == '"' {
+			value = value[1:len(value)-1]
+		}
+		argsMap["ssid"] = value
 	}
 
 	if strings.HasPrefix(msg, WpaCtrlReq) {
