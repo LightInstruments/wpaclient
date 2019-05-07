@@ -521,8 +521,12 @@ func (c *Client) ConnectNetwork(networkId int) error {
 		return errors.Wrapf(err, "Failed increasing desired network priority")
 	}
 
-	if err = c.Reassociate(); err != nil {
+/*	if err = c.Reassociate(); err != nil {
 		return errors.Wrapf(err, "Failed reassociating")
+	} */
+
+	if err = c.SelectNetwork(networkId); err != nil {
+		return errors.Wrapf(err, "Failed selecting network")
 	}
 
 	return nil
@@ -564,6 +568,11 @@ func (c *Client) CreateNetwork(ssid, password string) (int, error) {
 		return -1, errors.Wrapf(err, "Failed setting network priority")
 	}
 
+	if err = c.EnableNetwork(networkId); err != nil {
+		c.RemoveNetwork(networkId)
+		return -1, errors.Wrapf(err, "Failed enabling network")
+	}
+
 	return networkId, nil
 }
 
@@ -590,4 +599,17 @@ func (c *Client) HasNetwork(nwId int, ssid string) (bool, error) {
 func (c *Client) Reassociate() error {
 	_, err := c.Execute(CmdReassociate)
 	return err
+}
+
+func (c *Client) EnableAllNetworks() error {
+	nws, err := c.ListNetworks()
+	if err != nil {
+		return errors.Wrapf(err, "Failed listing networks")
+	}
+
+	for _, nw := range nws {
+		c.EnableNetwork(nw.ID)
+	}
+
+	return nil
 }
