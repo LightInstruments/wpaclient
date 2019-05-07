@@ -500,16 +500,29 @@ func (c *Client) ConnectNetwork(networkId int) error {
 		return errors.Wrapf(err, "Failed to retrieve status")
 	}
 
+	//already connected to desired network
 	if status.IsConnected() && status.Id == networkId {
 		return nil
 	}
 
-	if err = c.EnableNetwork(networkId); err != nil {
-		return errors.Wrapf(err, "Failed to enable network %d", networkId)
+	if status.IsConnected() {
+		currentNWId := status.Id
+
+		if err = c.SetNetworkPriority(currentNWId, 1); err != nil {
+			return errors.Wrapf(err, "Failed decreasing currents network priority")
+		}
 	}
 
-	if err = c.SelectNetwork(networkId); err != nil {
-		return errors.Wrapf(err, "Failed to select network %d", networkId)
+	if err = c.EnableNetwork(networkId); err != nil {
+		return errors.Wrapf(err, "Failed enabling network")
+	}
+
+	if err = c.SetNetworkPriority(networkId, 2); err != nil {
+		return errors.Wrapf(err, "Failed increasing desired network priority")
+	}
+
+	if err = c.Reassociate(); err != nil {
+		return errors.Wrapf(err, "Failed reassociating")
 	}
 
 	return nil
@@ -546,5 +559,35 @@ func (c *Client) CreateNetwork(ssid, password string) (int, error) {
 		}
 	}
 
+	if err = c.SetNetworkPriority(networkId, 1); err != nil {
+		c.RemoveNetwork(networkId)
+		return -1, errors.Wrapf(err, "Failed setting network priority")
+	}
+
 	return networkId, nil
+}
+
+func (c *Client) SetNetworkPriority(nwId, priority int) error {
+	_, err := c.Execute(CmdSetNetwork, strconv.Itoa(nwId), "priority", strconv.Itoa(priority))
+	return err
+}
+
+func (c *Client) HasNetwork(nwId int, ssid string) (bool, error) {
+	nws, err := c.ListNetworks()
+	if err != nil {
+		return false, err
+	}
+
+	for _, nw := range nws {
+		if nw.ID == nwId && nw.SSID == ssid {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (c *Client) Reassociate() error {
+	_, err := c.Execute(CmdReassociate)
+	return err
 }
