@@ -554,9 +554,11 @@ func (c *Client) CreateNetwork(ssid, password string) (int, error) {
 	}
 
 	if password == "" {
-		if err = c.SaveEmptyPassword(networkId); err != nil {
+		//Disable empty password as wpa_supplicant does not send any response notify for these
+	/*	if err = c.SaveEmptyPassword(networkId); err != nil {
 			return -1, errors.Wrapf(err, "Failed setting empty password")
-		}
+		} */
+		return -1, errors.Errorf("Empty password forbidden")
 	} else {
 		if err = c.SetNetworkPassword(networkId, password); err != nil {
 			return -1, errors.Wrapf(err, "Failed setting network password")
